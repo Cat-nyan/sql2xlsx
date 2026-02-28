@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>智能SQL查询助手</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3b82f6',
+            dark: '#1e293b'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .table-container {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    th {
+      background-color: #f8fafc;
+      font-weight: 600;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-5px); }
+      40%, 80% { transform: translateX(5px); }
+    }
+    .shake {
+      animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col items-center p-6">
+  <div class="w-full max-w-4xl bg-white rounded-xl shadow-md p-6 space-y-6">
+    <h1 class="text-2xl font-bold text-center text-gray-800">智能SQL查询助手</h1>
+
+
+     <!-- Token 输入区 -->
+    <div class="space-y-2">
+      <label for="token" class="block text-sm font-medium text-gray-700">Token（身份凭证）：</label>
+      <input
+        type="password"
+        id="token"
+        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:outline-none"
+        placeholder="请输入您的访问 Token"
+        value=""
+      />
+    </div>
+
+    <!-- 输入区 -->
+    <div class="space-y-4">
+      <label for="question" class="block text-sm font-medium text-gray-700">请输入您的问题：</label>
+      <textarea
+        id="question"
+        rows="3"
+        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:outline-none"
+        placeholder="例如：帮我查询订单号为126022652882480的数据，包含货号、数量、商品名称和金额"
+      ></textarea>
+      <div class="flex gap-3">
+        <button
+          id="queryBtn"
+          class="flex-1 bg-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition"
+        >
+          查询
+        </button>
+        <button
+          id="exportBtn"
+          class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition disabled:opacity-50"
+          disabled
+        >
+          导出 Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- 结果区 -->
+    <div id="resultSection" class="hidden">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg font-semibold text-gray-800">查询结果</h2>
+        <p class="text-sm text-gray-500" id="sqlHint"></p>
+      </div>
+      <div class="table-container mt-3 rounded border">
+        <table id="resultTable">
+          <!-- 动态填充 -->
+        </table>
+      </div>
+    </div>
+
+    <!-- 加载提示 -->
+    <div id="loading" class="hidden text-center py-4">
+      <div class="inline-block h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <span class="ml-2 text-gray-600">正在查询...</span>
+    </div>
+
+    <!-- 错误提示 -->
+    <div id="error" class="hidden text-red-600 text-sm"></div>
+  </div>
+
+  <script>
+    const questionInput = document.getElementById('question');
+    const queryBtn = document.getElementById('queryBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const loading = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+    const tokenInput = document.getElementById('token');
+
+    let currentData = null; // 保存当前结果用于导出
+    let filename = null;
+
+    // 查询
+    queryBtn.addEventListener('click', async () => {
+      const question = questionInput.value.trim();
+      const token = tokenInput.value.trim();
+      tokenInput.classList.remove('shake');
+      if (!token) {
+        tokenInput.classList.add('shake');
+        showError("请输入 Token!");
+        return;
+      }
+      if (!question) {
+        showError("请输入问题");
+        return;
+      }
+
+      showLoading();
+      hideError();
+      exportBtn.disabled = true;
+
+
+      try {
+        const res = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, token })
+        });
+        const contentDisposition = res.headers.get('Content-Disposition')
+        filename = 'download.xlsx'
+        if (contentDisposition){
+          const utf8Filename = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+          if (utf8Filename && utf8Filename[1]) {
+            // 处理 RFC 5987 编码的 UTF-8 文件名（如中文）
+            filename = decodeURIComponent(utf8Filename[1]);
+          } else {
+            // 处理普通 filename（可能带引号）
+            const asciiFilename = contentDisposition.match(/filename=["']?([^"']*)["']?/i);
+            if (asciiFilename && asciiFilename[1]) {
+              filename = asciiFilename[1];
+            }
+          }
+        }
+
+        currentData = await res.blob();
+        exportBtn.disabled = false;
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        hideLoading();
+      }
+    });
+
+    // 导出 Excel
+    exportBtn.addEventListener('click', async () => {
+      const url = window.URL.createObjectURL(currentData);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    });
+
+
+
+    function showLoading() {
+      loading.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+      loading.classList.add('hidden');
+    }
+
+    function showError(msg) {
+      errorDiv.textContent = msg;
+      errorDiv.classList.remove('hidden');
+    }
+
+    function hideError() {
+      errorDiv.classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

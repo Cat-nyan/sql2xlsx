@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+.env.local
+
+# 日志和数据库
+*.log
+*.sqlite3
+
+# Excel/临时文件
+*.xlsx
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# 操作系统
+.DS_Store
+Thumbs.db
