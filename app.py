@@ -37,8 +37,12 @@ def query():
         conn = create_engine(
             f"mysql+mysqlconnector://{settings.DB_USERNAME}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DATABASE}")
         sql = generate_sql(question)
-        filename = f"{uuid.uuid4().hex}.xlsx"
-        data = pd.read_sql(sql, conn)
+        if 'select' not in sql.lower():
+            message = {"message": ["查询失败，请重试。"]}
+            data = pd.DataFrame(message)
+        else:
+            filename = f"{uuid.uuid4().hex}.xlsx"
+            data = pd.read_sql(sql, conn)
     data.to_excel(bio, index=False)
     bio.seek(0)
     return send_file(bio, download_name=filename)

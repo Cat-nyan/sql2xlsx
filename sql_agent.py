@@ -8,6 +8,7 @@ from config import settings
 class CustomSQLDatabase(SQLDatabase):
     def get_table_info(self, table_names=None):
         original_info = super().get_table_info(table_names)
+        # 根据实际情况，添加外键关系描述
         fk_notes = """
         -- Table Relationship Description：
         -- order_info.sd_id → kehu.id
