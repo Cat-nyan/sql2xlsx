@@ -1,0 +1,27 @@
+services:
+
+  sql2xlsx:
+    build: .
+    ports:
+      - "${PORT:-5000}:5000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE: ${DATABASE}
+      AUTH_SECRET: ${AUTH_SECRET}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      MODEL_NAME: ${MODEL_NAME:-deepseek-chat}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-10}
+      QUESTION_MAX_CHARS: ${QUESTION_MAX_CHARS:-1000}
+      EXPORT_ESTIMATED_ROW_LIMIT: ${EXPORT_ESTIMATED_ROW_LIMIT:-200000}
+      TZ: ${TZ:-Asia/Shanghai}
+    restart: unless-stopped
+

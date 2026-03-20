@@ -3,6 +3,7 @@ from langchain_community.utilities import SQLDatabase
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import PromptTemplate
 from config import settings
+from functools import lru_cache
 
 
 class CustomSQLDatabase(SQLDatabase):
@@ -16,6 +17,19 @@ class CustomSQLDatabase(SQLDatabase):
         -- order_info.fhck_id → cangku.id
         """
         return '\n'.join([original_info, fk_notes])
+
+
+@lru_cache(maxsize=1)
+def _get_db() -> CustomSQLDatabase:
+    settings.validate()
+    return CustomSQLDatabase.from_uri(
+        f"mysql+mysqlconnector://{settings.DB_USERNAME}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DATABASE}"
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_model():
+    return init_chat_model(settings.MODEL_NAME)
 
 
 
@@ -37,15 +51,15 @@ def extract_sql_simple(text: str) -> str:
     return sql.strip()
 
 
-def generate_sql(user_prompt: str):
-    db = CustomSQLDatabase.from_uri(f"mysql+mysqlconnector://{settings.DB_USERNAME}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DATABASE}")
-    model = init_chat_model("deepseek-chat")
+def generate_sql(user_prompt: str) -> str:
+    db = _get_db()
+    model = _get_model()
 
     # user_prompt = "查询一下2026年2月份所有商品的销售额和销量，标头为商品货号，商品名，销售额，销量"
 
     custom_prompt = PromptTemplate.from_template(
-        """
-    You are a SQL expert. Based on the table schema below, write a correct and executable {dialect} query to answer the question.
+    """
+    You are a SQL expert. Based on the table schema below, write a correct and executable MySQL query to answer the question.
     - ONLY output the SQL query. Do NOT include any explanations, markdown, or extra text.
     - NEVER add "LIMIT" clause unless explicitly requested by the user--IGNORE the top_k value: {top_k}.
     - Select ONLY the columns that are relevant to the question.
@@ -66,5 +80,6 @@ def generate_sql(user_prompt: str):
 
     sql_query = sql_chain.invoke({"question": user_prompt})
     sql_query = extract_sql_simple(sql_query)
+    sql_query = sql_query.strip().rstrip(";").strip()
 
     return sql_query

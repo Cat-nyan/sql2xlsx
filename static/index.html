@@ -92,7 +92,6 @@
     <div id="resultSection" class="hidden">
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-semibold text-gray-800">查询结果</h2>
-        <p class="text-sm text-gray-500" id="sqlHint"></p>
       </div>
       <div class="table-container mt-3 rounded border">
         <table id="resultTable">
@@ -118,9 +117,10 @@
     const loading = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
     const tokenInput = document.getElementById('token');
+    const resultSection = document.getElementById('resultSection');
+    const resultTable = document.getElementById('resultTable');
 
-    let currentData = null; // 保存当前结果用于导出
-    let filename = null;
+    let currentQueryId = null;
 
     // 查询
     queryBtn.addEventListener('click', async () => {
@@ -140,31 +140,23 @@
       showLoading();
       hideError();
       exportBtn.disabled = true;
-
+      currentQueryId = null;
+      hideResult();
 
       try {
-        const res = await fetch('/query', {
+        const res = await fetch('/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question, token })
         });
-        const contentDisposition = res.headers.get('Content-Disposition')
-        filename = 'download.xlsx'
-        if (contentDisposition){
-          const utf8Filename = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
-          if (utf8Filename && utf8Filename[1]) {
-            // 处理 RFC 5987 编码的 UTF-8 文件名（如中文）
-            filename = decodeURIComponent(utf8Filename[1]);
-          } else {
-            // 处理普通 filename（可能带引号）
-            const asciiFilename = contentDisposition.match(/filename=["']?([^"']*)["']?/i);
-            if (asciiFilename && asciiFilename[1]) {
-              filename = asciiFilename[1];
-            }
-          }
+        const payload = await res.json();
+        if (!res.ok || !payload.ok) {
+          showError(payload.error || "查询失败");
+          return;
         }
 
-        currentData = await res.blob();
+        currentQueryId = payload.query_id;
+        renderResult(payload);
         exportBtn.disabled = false;
       } catch (err) {
         showError(err.message);
@@ -175,16 +167,110 @@
 
     // 导出 Excel
     exportBtn.addEventListener('click', async () => {
-      const url = window.URL.createObjectURL(currentData);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
+      const token = tokenInput.value.trim();
+      if (!token) {
+        showError("请输入 Token!");
+        return;
+      }
+      if (!currentQueryId) {
+        showError("请先预览查询结果再导出");
+        return;
+      }
+
+      showLoading();
+      hideError();
+      try {
+        const res = await fetch('/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, query_id: currentQueryId })
+        });
+        const blob = await res.blob();
+
+        const contentDisposition = res.headers.get('Content-Disposition');
+        let filename = 'download.xlsx';
+        if (contentDisposition){
+          const utf8Filename = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+          if (utf8Filename && utf8Filename[1]) {
+            filename = decodeURIComponent(utf8Filename[1]);
+          } else {
+            const asciiFilename = contentDisposition.match(/filename=["']?([^"']*)["']?/i);
+            if (asciiFilename && asciiFilename[1]) {
+              filename = asciiFilename[1];
+            }
+          }
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        hideLoading();
+      }
     });
 
+
+    function hideResult() {
+      resultSection.classList.add('hidden');
+      resultTable.innerHTML = '';
+    }
+
+    function showResult() {
+      resultSection.classList.remove('hidden');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+
+    function renderResult(payload) {
+      const columns = Array.isArray(payload.columns) ? payload.columns : [];
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+
+      if (columns.length === 0) {
+        resultTable.innerHTML = '<tr><td class="text-gray-500 p-4">无结果</td></tr>';
+        showResult();
+        return;
+      }
+
+      let thead = '<thead><tr>';
+      for (const col of columns) {
+        thead += `<th>${escapeHtml(col)}</th>`;
+      }
+      thead += '</tr></thead>';
+
+      let tbody = '<tbody>';
+      if (rows.length === 0) {
+        tbody += `<tr><td colspan="${columns.length}" class="text-gray-500 p-4">无数据</td></tr>`;
+      } else {
+        for (const row of rows) {
+          tbody += '<tr>';
+          for (let i = 0; i < columns.length; i++) {
+            const cell = Array.isArray(row) ? row[i] : '';
+            tbody += `<td>${cell === null || cell === undefined ? '' : escapeHtml(cell)}</td>`;
+          }
+          tbody += '</tr>';
+        }
+      }
+      tbody += '</tbody>';
+
+      resultTable.innerHTML = thead + tbody;
+      showResult();
+
+      if (payload.truncated) {
+        showError(`仅预览前 ${payload.preview_limit || ''} 行，导出将包含全部结果（若未在问题中限制）。`);
+      }
+    }
 
 
     function showLoading() {
@@ -205,4 +291,3 @@
     }
   </script>
 </body>
-</html>
