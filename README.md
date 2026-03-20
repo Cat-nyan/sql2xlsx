@@ -150,4 +150,4 @@ gunicorn --bind 0.0.0.0:5000 --timeout 120 app:app
 
 ## 截图
 
-!\[UI 预览]\(image/1.jpeg)
+![UI预览](./image/1.png)
