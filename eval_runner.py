@@ -11,7 +11,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 from config import settings
-from sql_agent import generate_sql
+from service.sql_agent import generate_sql
 
 
 def _normalize_sql(sql: str) -> str:

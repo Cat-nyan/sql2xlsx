@@ -2,7 +2,7 @@ from flask import Flask, request, send_file, jsonify, g
 from sqlalchemy import create_engine
 import pandas as pd
 from io import BytesIO
-from sql_agent import generate_sql
+from service.sql_agent import generate_sql
 from config import settings
 import uuid
 from flask_limiter import Limiter

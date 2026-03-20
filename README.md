@@ -13,7 +13,7 @@
 ## 目录结构
 
 - `app.py`：Flask 服务（`/`、`/preview`、`/export`）
-- `sql_agent.py`：调用 LLM 生成 SQL
+- `service/sql_agent.py`：调用 LLM 生成 SQL
 - `config.py`：环境变量配置与校验
 - `static/index.html`：内置前端页面
 - `Dockerfile` / `docker-compose.yml`：容器化部署
